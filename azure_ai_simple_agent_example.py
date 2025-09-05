@@ -8,6 +8,7 @@
 # requirements.txt
 # azure-identity
 # python-dotenv
+# azure-ai-projects
 
 import os
 from dotenv import load_dotenv
