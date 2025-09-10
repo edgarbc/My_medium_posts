@@ -28,8 +28,6 @@ agents_client = AgentsClient(
 )
 
 with agents_client:
-
-
     # Create an agent to prioritize support tickets
     # Create an agent to prioritize support tickets
     priority_agent_name = "priority_agent"
@@ -43,7 +41,6 @@ with agents_client:
 
     Only output the urgency level and a very brief explanation.
     """
-
     priority_agent = agents_client.create_agent(
         model=model_deployment,
         name=priority_agent_name,
