@@ -1,0 +1,6 @@
+uvicorn
+azure-ai-projects
+azure-identity
+python-dotenv
+
+# pip install -r requirements.txt --pre azure-ai-projects mcp
