@@ -1,12 +1,14 @@
 # Add references
 # Add references
 import asyncio
-from typing import cast
-from agent_framework import ChatMessage, Role, SequentialBuilder, WorkflowOutputEvent
-from agent_framework.azure import AzureOpenAIChatClient
-from azure.identity import AzureCliCredential
+from semantic_kernel.agents import Agent, ChatCompletionAgent, SequentialOrchestration
+from semantic_kernel.agents.runtime import InProcessRuntime
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.contents import ChatMessageContent
 
-async def main():
+
+
+def get_agents() -> list[Agent]:
     # Agent instructions
     summarizer_instructions="""
     Summarize the customer's feedback in one short sentence. Keep it neutral and concise.
@@ -26,54 +28,64 @@ async def main():
     Log as positive feedback to share with design and marketing.
     Log as enhancement request for product backlog.
     """
-
-    # Create the chat client
-    # Create the chat client
-    chat_client = AzureOpenAIChatClient(credential=AzureCliCredential())    
-
-    # Create agents
-    # Create agents
-    summarizer = chat_client.create_agent(
-        instructions=summarizer_instructions,
-        name="summarizer",
+    # Create a summarizer agent
+    summarizer_agent = ChatCompletionAgent(
+       name="SummarizerAgent",
+       instructions=summarizer_instructions,
+       service=AzureChatCompletion(),
     )
 
-    classifier = chat_client.create_agent(
+    # Create a classifier agent
+    classifier_agent = ChatCompletionAgent(
+       name="ClassifierAgent",
         instructions=classifier_instructions,
-        name="classifier",
+       service=AzureChatCompletion(),
     )
 
-    action = chat_client.create_agent(
-        instructions=action_instructions,
-        name="action",
-    )    
+    # create an action agent
+    action_agent = ChatCompletionAgent(
+       name="ActionAgent",
+       instructions=action_instructions,
+       service=AzureChatCompletion(),
+    )
+    return [summarizer_agent, classifier_agent, action_agent]
 
-    # Initialize the current feedback
-    # Initialize the current feedback
-    feedback="""
-    I use the dashboard every day to monitor metrics, and it works well overall. 
-    But when I'm working late at night, the bright screen is really harsh on my eyes. 
-    If you added a dark mode option, it would make the experience much more comfortable.
-    """    
 
-    # Build sequential orchestration
-    # Build sequential orchestration
-    workflow = SequentialBuilder().participants([summarizer, classifier, action]).build()    
-    
-    # Run and collect outputs
-    # Run and collect outputs
-    outputs: list[list[ChatMessage]] = []
-    async for event in workflow.run_stream(f"Customer feedback: {feedback}"):
-        if isinstance(event, WorkflowOutputEvent):
-            outputs.append(cast(list[ChatMessage], event.data))    
-    
-    # Display outputs
-    # Display outputs
-    if outputs:
-        for i, msg in enumerate(outputs[-1], start=1):
-            name = msg.author_name or ("assistant" if msg.role == Role.ASSISTANT else "user")
-            print(f"{'-' * 60}\n{i:02d} [{name}]\n{msg.text}")    
-    
-    
+def agent_response_callback(message: ChatMessageContent) -> None:
+    print(f"# {message.name}\n{message.content}")
+
+
+async def main():
+    # Initialize the input task
+    task="""
+    I tried updating my profile picture several times today, but the app kept freezing halfway through the process. 
+    I had to restart it three times, and in the end, the picture still wouldn't upload. 
+    It's really frustrating and makes the app feel unreliable.
+    """
+
+    # Create a sequential orchestration with a response callback to observe the output from each agent.
+    sequential_orchestration = SequentialOrchestration(
+       members=get_agents(),
+       agent_response_callback=agent_response_callback,
+    )
+
+    # Create a runtime and start it
+    runtime = InProcessRuntime()
+    runtime.start()
+    # Invoke the orchestration with a task and the runtime
+    orchestration_result = await sequential_orchestration.invoke(
+       task=task,
+       runtime=runtime,
+    )
+
+    # Wait for the results
+    value = await orchestration_result.get(timeout=20)
+    print(f"\n****** Task Input ******{task}")
+    print(f"***** Final Result *****\n{value}")    
+
+    # Stop the runtime when idle
+    await runtime.stop_when_idle()    
+
 if __name__ == "__main__":
     asyncio.run(main())
+    

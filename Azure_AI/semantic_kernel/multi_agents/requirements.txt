@@ -1,3 +1,3 @@
 azure-identity
-agent-framework
+semantic-kernel
 python-dotenv
